@@ -38,6 +38,26 @@ public:
     }
 };
 
+class IWriter {
+public:
+    virtual void write(const string& filename, const string& text) = 0;
+    virtual ~IWriter() {}
+};
+
+class FileWriter : public IWriter {
+public:
+    void write(const string& filename, const string& text) {
+        fstream file(filename, fstream::app);
+        if (file.is_open()) {
+            file << text;
+            file.close();
+            cout << "Text has been saved successfully" << endl;
+        } else {
+            throw runtime_error("Error opening file for saving");
+        }
+    }
+};
+
 int main() {
     HMODULE handle = LoadLibrary(TEXT("caesar.dll"));
 
@@ -55,6 +75,7 @@ int main() {
 
     int key, command, start, end;
     IReader* reader = new FileReader();
+    IWriter* writer = new FileWriter();
     string loadFile, writeFile;
     while (true) {
         cout << "Enter 1 to encrypt the text/2 to decrypt the text/3 to stop the program: " << endl;
@@ -68,18 +89,25 @@ int main() {
             cin.ignore();
             try {
                 string fileText = reader->read(loadFile, start, end);
-                cout << "Enter " << (command == 1 ? "encryption" : "decryption") << " key: " << endl;
-                cin >> key;
-                cin.ignore();
-                char* processedText = (command == 1) ? encrypt_ptr(fileText.c_str(), key) : decrypt_ptr(fileText.c_str(), key);
-                cout << (command == 1 ? "Encrypted" : "Decrypted") << " text: " << processedText << endl;
-                delete[] processedText;
+                cout << "Enter the filename for saving: " << endl;
+                getline(cin, writeFile);
+                try {
+                    cout << "Enter " << (command == 1 ? "encryption" : "decryption") << " key: " << endl;
+                    cin >> key;
+                    cin.ignore();
+                    char* processedText = (command == 1) ? encrypt_ptr(fileText.c_str(), key) : decrypt_ptr(fileText.c_str(), key);
+                    writer->write(writeFile, processedText);
+                    delete[] processedText;
+                } catch (const exception& e) {
+                    cout << "Error: " << e.what() << endl;
+                }
             } catch (const exception& e) {
                 cout << "Error: " << e.what() << endl;
             }
         } else if (command == 3) {
             cout << "Program stopped" << endl;
             delete reader;
+            delete writer;
             break;
         } else {
             cout << "Enter a valid command" << endl;
