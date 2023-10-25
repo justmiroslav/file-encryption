@@ -6,6 +6,42 @@ using namespace std;
 typedef char* (*encrypt_ptr_t)(const char*, int);
 typedef char* (*decrypt_ptr_t)(const char*, int);
 
+class ICryptor {
+public:
+    virtual char* encrypt(const char* text, int key) = 0;
+    virtual char* decrypt(const char* text, int key) = 0;
+    virtual ~ICryptor() {}
+};
+
+class Cipher : public ICryptor {
+private:
+    encrypt_ptr_t encrypt_ptr;
+    decrypt_ptr_t decrypt_ptr;
+public:
+    Cipher() {
+        HMODULE handle = LoadLibrary(TEXT("caesar.dll"));
+
+        if (handle == nullptr || handle == INVALID_HANDLE_VALUE) {
+            throw runtime_error("Library not found");
+        }
+
+        encrypt_ptr = (encrypt_ptr_t)GetProcAddress(handle, "encrypt");
+        decrypt_ptr = (decrypt_ptr_t)GetProcAddress(handle, "decrypt");
+
+        if (encrypt_ptr == nullptr || decrypt_ptr == nullptr) {
+            throw runtime_error("Functions not found in DLL");
+        }
+    }
+
+    char* encrypt(const char* text, int key) {
+        return encrypt_ptr(text, key);
+    }
+
+    char* decrypt(const char* text, int key) {
+        return decrypt_ptr(text, key);
+    }
+};
+
 class IReader {
 public:
     virtual string read(const string& filename, int start, int end) = 0;
@@ -59,23 +95,10 @@ public:
 };
 
 int main() {
-    HMODULE handle = LoadLibrary(TEXT("caesar.dll"));
-
-    if (handle == nullptr || handle == INVALID_HANDLE_VALUE) {
-        cout << "Lib not found" << endl;
-        return 1;
-    }
-    encrypt_ptr_t encrypt_ptr = (encrypt_ptr_t)GetProcAddress(handle, "encrypt");
-    decrypt_ptr_t decrypt_ptr = (decrypt_ptr_t)GetProcAddress(handle, "decrypt");
-
-    if (encrypt_ptr == nullptr || decrypt_ptr == nullptr) {
-        cout << "Functions not found in DLL" << endl;
-        return 1;
-    }
-
     int key, command, start, end;
     IReader* reader = new FileReader();
     IWriter* writer = new FileWriter();
+    ICryptor* cipher = new Cipher();
     string loadFile, writeFile;
     while (true) {
         cout << "Enter 1 to encrypt the text/2 to decrypt the text/3 to stop the program: " << endl;
@@ -95,7 +118,7 @@ int main() {
                     cout << "Enter " << (command == 1 ? "encryption" : "decryption") << " key: " << endl;
                     cin >> key;
                     cin.ignore();
-                    char* processedText = (command == 1) ? encrypt_ptr(fileText.c_str(), key) : decrypt_ptr(fileText.c_str(), key);
+                    char* processedText = (command == 1) ? cipher->encrypt(fileText.c_str(), key) : cipher->decrypt(fileText.c_str(), key);
                     writer->write(writeFile, processedText);
                     delete[] processedText;
                 } catch (const exception& e) {
@@ -108,6 +131,7 @@ int main() {
             cout << "Program stopped" << endl;
             delete reader;
             delete writer;
+            delete cipher;
             break;
         } else {
             cout << "Enter a valid command" << endl;
